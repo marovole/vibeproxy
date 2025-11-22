@@ -5,6 +5,40 @@ All notable changes to VibeProxy will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [1.2.0] - 2025-11-22
+
+### Added
+- **Amp CLI Integration** - Full support for Amp CLI through VibeProxy
+  - Smart path routing: `/auth/cli-login` → `/api/auth/cli-login` for authentication
+  - Provider path rewriting: `/provider/*` → `/api/provider/*` for model requests
+  - Management route forwarding to ampcode.com with Location header rewriting
+  - Automatic fallback to Amp API when local OAuth tokens are unavailable
+  - Seamless integration allowing Factory and Amp CLI through single proxy
+- **New Setup Guide** - Comprehensive AMPCODE_SETUP.md with step-by-step instructions
+  - Configuration of Amp URL and settings
+  - Secrets file format conversion for CLIProxyAPI compatibility
+  - Troubleshooting guide for common issues
+- **Config Updates** - Added Amp upstream configuration
+  - `amp-upstream-url`: https://ampcode.com
+  - `amp-restrict-management-to-localhost`: true (security)
+
+### Fixed
+- **CLI Flag Fix** - Corrected `-config` flag in ServerManager (was incorrectly using `--config`)
+  - Resolves "Could not start backend server on port 8318" errors
+- **Token Expiry Handling** - Improved OAuth token expiry detection
+  - System now correctly falls back to Amp API when local tokens expire
+
+### Changed
+- **README Updates** - Added reference to new Amp CLI setup guide alongside Factory guide
+- **Architecture** - Enhanced ThinkingProxy routing logic for multi-tool support
+  - One proxy server now handles Factory CLI, Amp CLI, and future integrations
+
+### Technical Details
+- ThinkingProxy path rewrites apply before management route detection
+- Location header rewriting in Amp responses ensures redirects work through proxy
+- API key resolution from `~/.local/share/amp/secrets.json` for fallback requests
+- Compatible with CLIProxyAPI 6.5.7's Amp module
+
 ## [1.1.0] - 2025-11-22
 
 ### Updated
