@@ -146,7 +146,7 @@ jobs:
       - name: Create Pull Request
         uses: peter-evans/create-pull-request@v6
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ secrets.AUTO_UPDATE_TOKEN }}
           commit-message: Bump CLIProxyAPI to ${{ steps.get-latest-release.outputs.version }}
           title: Bump CLIProxyAPI to ${{ steps.get-latest-release.outputs.version }}
           body: |
