@@ -9,6 +9,7 @@ struct SettingsView: View {
     @State private var isAuthenticatingCodex = false
     @State private var isAuthenticatingGemini = false
     @State private var isAuthenticatingQwen = false
+    @State private var isAuthenticatingAntigravity = false
     @State private var showingAuthResult = false
     @State private var authResultMessage = ""
     @State private var authResultSuccess = false
@@ -241,10 +242,53 @@ struct SettingsView: View {
                         }
                     }
                 }
+
+                HStack {
+                    if let nsImage = IconCatalog.shared.image(named: "icon-antigravity.png", resizedTo: NSSize(width: 20, height: 20), template: true) {
+                        Image(nsImage: nsImage)
+                            .resizable()
+                            .renderingMode(.template)
+                            .frame(width: 20, height: 20)
+                    }
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text("Antigravity")
+                        if authManager.antigravityStatus.isAuthenticated {
+                            Text(authManager.antigravityStatus.email ?? "Connected")
+                                .font(.caption2)
+                                .foregroundColor(authManager.antigravityStatus.isExpired ? .red : .green)
+                            if authManager.antigravityStatus.isExpired {
+                                Text("(expired)")
+                                    .font(.caption2)
+                                    .foregroundColor(.red)
+                            }
+                        }
+                    }
+                    Spacer()
+                    if isAuthenticatingAntigravity {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        if authManager.antigravityStatus.isAuthenticated {
+                            if authManager.antigravityStatus.isExpired {
+                                Button("Reconnect") {
+                                    connectAntigravity()
+                                }
+                            } else {
+                                Button("Disconnect") {
+                                    disconnectAntigravity()
+                                }
+                            }
+                        } else {
+                            Button("Connect") {
+                                connectAntigravity()
+                            }
+                        }
+                    }
+                }
+                .help("Antigravity is a Google-hosted service that provides OAuth-based access to various AI models, including Gemini and Claude. One login gives you access to multiple AI services.")
                 }
             }
             .formStyle(.grouped)
-            .scrollDisabled(true)
 
             Spacer()
                 .frame(height: 12)
@@ -306,7 +350,7 @@ struct SettingsView: View {
             }
             .padding(.bottom, 12)
         }
-        .frame(width: 480, height: 490)
+        .frame(width: 480, height: 590)
         .sheet(isPresented: $showingQwenEmailPrompt) {
             VStack(spacing: 16) {
                 Text("Qwen Account Email")
@@ -398,7 +442,7 @@ struct SettingsView: View {
 
     private func disconnectClaudeCode() {
         isAuthenticatingClaude = true
-        performDisconnect(for: "claude", serviceName: "Claude Code") { success, message in
+        performDisconnect(for: .claude) { success, message in
             self.isAuthenticatingClaude = false
             self.authResultSuccess = success
             self.authResultMessage = message
@@ -431,7 +475,7 @@ struct SettingsView: View {
 
     private func disconnectCodex() {
         isAuthenticatingCodex = true
-        performDisconnect(for: "codex", serviceName: "Codex") { success, message in
+        performDisconnect(for: .codex) { success, message in
             self.isAuthenticatingCodex = false
             self.authResultSuccess = success
             self.authResultMessage = message
@@ -464,7 +508,7 @@ struct SettingsView: View {
 
     private func disconnectGemini() {
         isAuthenticatingGemini = true
-        performDisconnect(for: "gemini", serviceName: "Gemini") { success, message in
+        performDisconnect(for: .gemini) { success, message in
             self.isAuthenticatingGemini = false
             self.authResultSuccess = success
             self.authResultMessage = message
@@ -501,8 +545,41 @@ struct SettingsView: View {
 
     private func disconnectQwen() {
         isAuthenticatingQwen = true
-        performDisconnect(for: "qwen", serviceName: "Qwen") { success, message in
+        performDisconnect(for: .qwen) { success, message in
             self.isAuthenticatingQwen = false
+            self.authResultSuccess = success
+            self.authResultMessage = message
+            self.showingAuthResult = true
+        }
+    }
+
+    private func connectAntigravity() {
+        isAuthenticatingAntigravity = true
+        NSLog("[SettingsView] Starting Antigravity authentication")
+
+        serverManager.runAuthCommand(.antigravityLogin) { success, output in
+            NSLog("[SettingsView] Auth completed - success: %d, output: %@", success, output)
+            DispatchQueue.main.async {
+                self.isAuthenticatingAntigravity = false
+
+                if success {
+                    self.authResultSuccess = true
+                    self.authResultMessage = "✓ Antigravity authenticated successfully!\n\nPlease complete the authentication in your browser, then the app will automatically detect your credentials.\n\nℹ️ Antigravity provides unified access to multiple AI models (Gemini, Claude, and more) through a single OAuth login."
+                    self.showingAuthResult = true
+                    // File monitor will automatically update the status
+                } else {
+                    self.authResultSuccess = false
+                    self.authResultMessage = "Authentication failed. Please check if the browser opened and try again.\n\nDetails: \(output.isEmpty ? "No output from authentication process" : output)"
+                    self.showingAuthResult = true
+                }
+            }
+        }
+    }
+
+    private func disconnectAntigravity() {
+        isAuthenticatingAntigravity = true
+        performDisconnect(for: .antigravity) { success, message in
+            self.isAuthenticatingAntigravity = false
             self.authResultSuccess = success
             self.authResultMessage = message
             self.showingAuthResult = true
@@ -544,7 +621,7 @@ struct SettingsView: View {
         fileMonitor = nil
     }
 
-    private func performDisconnect(for serviceType: String, serviceName: String, completion: @escaping (Bool, String) -> Void) {
+    private func performDisconnect(for serviceType: ServiceType, completion: @escaping (Bool, String) -> Void) {
         let authDir = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".cli-proxy-api")
         let wasRunning = serverManager.isRunning
         let manager = serverManager
@@ -567,7 +644,7 @@ struct SettingsView: View {
                             let data = try Data(contentsOf: fileURL, options: [.mappedIfSafe])
                             guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
                                   let type = json["type"] as? String,
-                                  type.lowercased() == serviceType.lowercased() else {
+                                  type.lowercased() == serviceType.rawValue else {
                                 continue
                             }
                             
@@ -578,15 +655,15 @@ struct SettingsView: View {
                         if let targetURL = targetURL {
                             try FileManager.default.removeItem(at: targetURL)
                             NSLog("[Disconnect] Deleted auth file: %@", targetURL.path)
-                            disconnectResult = (true, "\(serviceName) disconnected successfully")
+                            disconnectResult = (true, "\(serviceType.displayName) disconnected successfully")
                         } else {
-                            disconnectResult = (false, "No \(serviceName) credentials were found.")
+                            disconnectResult = (false, "No \(serviceType.displayName) credentials were found.")
                         }
                     } else {
                         disconnectResult = (false, "Unable to access credentials directory.")
                     }
                 } catch {
-                    disconnectResult = (false, "Failed to disconnect \(serviceName): \(error.localizedDescription)")
+                    disconnectResult = (false, "Failed to disconnect \(serviceType.displayName): \(error.localizedDescription)")
                 }
                 
                 DispatchQueue.main.async {
