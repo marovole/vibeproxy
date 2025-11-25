@@ -64,6 +64,34 @@ Edit your Factory configuration file at `~/.factory/config.json` (if the file do
 {
   "custom_models": [
     {
+      "model_display_name": "CC: Opus 4.5 (High)",
+      "model": "claude-opus-4-5-20251101-thinking-32000",
+      "base_url": "http://localhost:8317",
+      "api_key": "dummy-not-used",
+      "provider": "anthropic"
+    },
+    {
+      "model_display_name": "CC: Opus 4.5 (Medium)",
+      "model": "claude-opus-4-5-20251101-thinking-10000",
+      "base_url": "http://localhost:8317",
+      "api_key": "dummy-not-used",
+      "provider": "anthropic"
+    },
+    {
+      "model_display_name": "CC: Opus 4.5 (Low)",
+      "model": "claude-opus-4-5-20251101-thinking-4000",
+      "base_url": "http://localhost:8317",
+      "api_key": "dummy-not-used",
+      "provider": "anthropic"
+    },
+    {
+      "model_display_name": "CC: Opus 4.5",
+      "model": "claude-opus-4-5-20251101",
+      "base_url": "http://localhost:8317",
+      "api_key": "dummy-not-used",
+      "provider": "anthropic"
+    },
+    {
       "model_display_name": "CC: Opus 4.1",
       "model": "claude-opus-4-1-20250805",
       "base_url": "http://localhost:8317",
@@ -298,6 +326,7 @@ Edit your Factory configuration file at `~/.factory/config.json` (if the file do
    /model
    ```
    Then choose from:
+   - `claude-opus-4-5` (Claude Opus 4.5 - Most powerful)
    - `claude-sonnet-4-5` (Claude 4.5 Sonnet)
    - `claude-opus-4-1` (Claude Opus 4.1)
    - `gpt-5`, `gpt-5.1`, `gpt-5-codex`, `gpt-5.1-codex`, etc.
@@ -308,9 +337,10 @@ Edit your Factory configuration file at `~/.factory/config.json` (if the file do
 ## Available Models
 
 ### Claude Models
-- `claude-opus-4-1-20250805` - Claude Opus 4.1 (Most powerful)
-- `claude-sonnet-4-5-20250929` - Claude 4.5 Sonnet (Latest)
-- **Extended Thinking Variants** (Claude 3.7+, Opus 4, Sonnet 4):
+- `claude-opus-4-5-20251101` - Claude Opus 4.5 (Most powerful, latest)
+- `claude-opus-4-1-20250805` - Claude Opus 4.1
+- `claude-sonnet-4-5-20250929` - Claude 4.5 Sonnet
+- **Extended Thinking Variants** (Claude 3.7+, Opus 4/4.5, Sonnet 4):
   - `*-thinking-NUMBER` - Custom thinking token budget (e.g., `-thinking-5000`)
   - Recommended presets:
     - `*-thinking-4000` - "Think" mode (~4K tokens)
@@ -426,6 +456,7 @@ If the suffix is not a valid integer (e.g., `-thinking-blabla`), VibeProxy strip
 
 **Supported Models**:
 - Claude 3.7 Sonnet (`claude-3-7-sonnet-20250219`)
+- Claude Opus 4.5 (`claude-opus-4-5-*`)
 - Claude Opus 4 (`claude-opus-4-*`)
 - Claude Sonnet 4 (`claude-sonnet-4-*`)
 
