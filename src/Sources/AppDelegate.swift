@@ -2,6 +2,7 @@ import Cocoa
 import SwiftUI
 import WebKit
 import UserNotifications
+import Sparkle
 
 class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNotificationCenterDelegate {
     var statusItem: NSStatusItem!
@@ -11,6 +12,12 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
     var thinkingProxy: ThinkingProxy!
     private let notificationCenter = UNUserNotificationCenter.current()
     private var notificationPermissionGranted = false
+    private let updaterController: SPUStandardUpdaterController
+    
+    override init() {
+        self.updaterController = SPUStandardUpdaterController(startingUpdater: true, updaterDelegate: nil, userDriverDelegate: nil)
+        super.init()
+    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         // Setup menu bar
@@ -107,6 +114,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
         copyURLItem.isEnabled = false
         copyURLItem.tag = 102
         menu.addItem(copyURLItem)
+
+        menu.addItem(NSMenuItem.separator())
+
+        // Check for Updates
+        let checkForUpdatesItem = NSMenuItem(title: "Check for Updates...", action: #selector(SPUStandardUpdaterController.checkForUpdates(_:)), keyEquivalent: "u")
+        checkForUpdatesItem.target = updaterController
+        menu.addItem(checkForUpdatesItem)
 
         menu.addItem(NSMenuItem.separator())
 

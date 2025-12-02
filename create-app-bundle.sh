@@ -29,11 +29,15 @@ echo -e "${BLUE}Creating .app bundle structure...${NC}"
 rm -rf "$APP_DIR"
 mkdir -p "$APP_DIR/Contents/MacOS"
 mkdir -p "$APP_DIR/Contents/Resources"
+mkdir -p "$APP_DIR/Contents/Frameworks"
 
 # Copy executable
 echo -e "${BLUE}Copying executable...${NC}"
 cp "$BUILD_DIR/CLIProxyMenuBar" "$APP_DIR/Contents/MacOS/"
 chmod +x "$APP_DIR/Contents/MacOS/CLIProxyMenuBar"
+
+# Add rpath for Frameworks directory (needed for Sparkle)
+install_name_tool -add_rpath "@loader_path/../Frameworks" "$APP_DIR/Contents/MacOS/CLIProxyMenuBar" 2>/dev/null || true
 
 # Copy resources (copy contents, not the folder itself)
 echo -e "${BLUE}Copying resources...${NC}"
@@ -70,6 +74,16 @@ echo -e "${GREEN}✅ cli-proxy-api bundled: $(ls -lh "$APP_DIR/Contents/Resource
 # Copy app icon
 if [ -f "$SRC_DIR/Sources/Resources/AppIcon.icns" ]; then
     cp "$SRC_DIR/Sources/Resources/AppIcon.icns" "$APP_DIR/Contents/Resources/"
+fi
+
+# Copy Sparkle.framework
+echo -e "${BLUE}Copying Sparkle.framework...${NC}"
+SPARKLE_FRAMEWORK="$BUILD_DIR/Sparkle.framework"
+if [ -d "$SPARKLE_FRAMEWORK" ]; then
+    cp -R "$SPARKLE_FRAMEWORK" "$APP_DIR/Contents/Frameworks/"
+    echo -e "${GREEN}✅ Sparkle.framework bundled${NC}"
+else
+    echo -e "${YELLOW}⚠️ Sparkle.framework not found at $SPARKLE_FRAMEWORK${NC}"
 fi
 
 # Copy Info.plist and inject version
@@ -128,6 +142,18 @@ if [ -n "$CODESIGN_IDENTITY" ]; then
                 "$APP_DIR/Contents/Resources/cli-proxy-api"
         fi
         echo -e "${GREEN}✅ cli-proxy-api signed${NC}"
+    fi
+    
+    # Sign Sparkle.framework (required for notarization)
+    if [ -d "$APP_DIR/Contents/Frameworks/Sparkle.framework" ]; then
+        echo -e "${BLUE}Signing Sparkle.framework...${NC}"
+        codesign --force --sign "$CODESIGN_IDENTITY" --options runtime --timestamp \
+            "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Autoupdate"
+        codesign --force --sign "$CODESIGN_IDENTITY" --options runtime --timestamp \
+            "$APP_DIR/Contents/Frameworks/Sparkle.framework/Versions/B/Updater.app"
+        codesign --force --sign "$CODESIGN_IDENTITY" --options runtime --timestamp \
+            "$APP_DIR/Contents/Frameworks/Sparkle.framework"
+        echo -e "${GREEN}✅ Sparkle.framework signed${NC}"
     fi
     
     # Sign the main executable with hardened runtime
