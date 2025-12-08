@@ -39,7 +39,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(updateMenuBarStatus),
-            name: NSNotification.Name("ServerStatusChanged"),
+            name: .serverStatusChanged,
             object: nil
         )
     }
@@ -298,7 +298,7 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSWindowDelegate, UNUserNoti
     }
 
     func applicationWillTerminate(_ notification: Notification) {
-        NotificationCenter.default.removeObserver(self, name: NSNotification.Name("ServerStatusChanged"), object: nil)
+        NotificationCenter.default.removeObserver(self, name: .serverStatusChanged, object: nil)
         // Final cleanup - stop server if still running
         if serverManager.isRunning {
             thinkingProxy.stop()

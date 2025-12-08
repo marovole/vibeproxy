@@ -129,7 +129,7 @@ struct ServiceRow: View {
         }
         .padding(.vertical, 4)
         .help(helpText ?? "")
-        .onChange(of: isExpanded) { newValue in
+        .onChange(of: isExpanded) { _, newValue in
             onExpandChange?(newValue)
         }
         .alert("Remove Account", isPresented: $showingRemoveConfirmation) {
@@ -203,7 +203,7 @@ struct SettingsView: View {
 
                 Section {
                     Toggle("Launch at login", isOn: $launchAtLogin)
-                        .onChange(of: launchAtLogin) { newValue in
+                        .onChange(of: launchAtLogin) { _, newValue in
                             toggleLaunchAtLogin(newValue)
                         }
 
@@ -394,7 +394,7 @@ struct SettingsView: View {
                     try SMAppService.mainApp.unregister()
                 }
             } catch {
-                print("Failed to toggle launch at login: \(error)")
+                NSLog("[SettingsView] Failed to toggle launch at login: %@", error.localizedDescription)
             }
         }
     }
@@ -552,5 +552,3 @@ struct SettingsView: View {
         fileMonitor = nil
     }
 }
-
-extension ServerManager: ObservableObject {}

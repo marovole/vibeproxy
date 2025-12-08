@@ -21,6 +21,13 @@ class ThinkingProxy {
     private let targetPort: UInt16 = 8318
     private let targetHost = "127.0.0.1"
     private(set) var isRunning = false
+    private let stateQueue = DispatchQueue(label: "io.automaze.vibeproxy.thinking-proxy-state")
+    
+    private enum Config {
+        static let hardTokenCap = 32000
+        static let minimumHeadroom = 1024
+        static let headroomRatio = 0.1
+    }
     
     /**
      Starts the thinking proxy server on port 8317
@@ -35,7 +42,11 @@ class ThinkingProxy {
             let parameters = NWParameters.tcp
             parameters.allowLocalEndpointReuse = true
             
-            listener = try NWListener(using: parameters, on: NWEndpoint.Port(rawValue: proxyPort)!)
+            guard let port = NWEndpoint.Port(rawValue: proxyPort) else {
+                NSLog("[ThinkingProxy] Invalid port: %d", proxyPort)
+                return
+            }
+            listener = try NWListener(using: parameters, on: port)
             
             listener?.stateUpdateHandler = { [weak self] state in
                 switch state {
@@ -74,14 +85,16 @@ class ThinkingProxy {
      Stops the thinking proxy server
      */
     func stop() {
-        guard isRunning else { return }
-        
-        listener?.cancel()
-        listener = nil
-        DispatchQueue.main.async { [weak self] in
-            self?.isRunning = false
+        stateQueue.sync {
+            guard isRunning else { return }
+            
+            listener?.cancel()
+            listener = nil
+            DispatchQueue.main.async { [weak self] in
+                self?.isRunning = false
+            }
+            NSLog("[ThinkingProxy] Stopped")
         }
-        NSLog("[ThinkingProxy] Stopped")
     }
     
     /**
@@ -230,15 +243,13 @@ class ThinkingProxy {
         // Try to parse and modify JSON body for POST requests
         var modifiedBody = bodyString
         
-        var transformationApplied = false
         if method == "POST" && !bodyString.isEmpty {
             if let result = processThinkingParameter(jsonString: bodyString) {
                 modifiedBody = result.0
-                transformationApplied = result.1
             }
         }
         
-        forwardRequest(method: method, path: rewrittenPath, version: httpVersion, headers: headers, body: modifiedBody, originalConnection: connection, forceConnectionClose: transformationApplied)
+        forwardRequest(method: method, path: rewrittenPath, version: httpVersion, headers: headers, body: modifiedBody, originalConnection: connection)
     }
     
     /**
@@ -271,8 +282,7 @@ class ThinkingProxy {
             
             // Only add thinking parameter if it's a valid integer
             if let budget = Int(budgetString), budget > 0 {
-                let hardCap = 32000
-                let effectiveBudget = min(budget, hardCap - 1)
+                let effectiveBudget = min(budget, Config.hardTokenCap - 1)
                 if effectiveBudget != budget {
                     NSLog("[ThinkingProxy] Adjusted thinking budget from \(budget) to \(effectiveBudget) to stay within limits")
                 }
@@ -284,11 +294,11 @@ class ThinkingProxy {
                 
                 // Ensure max token limits are greater than the thinking budget
                 // Claude requires: max_output_tokens (or legacy max_tokens) > thinking.budget_tokens
-                let tokenHeadroom = max(1024, effectiveBudget / 10)
+                let tokenHeadroom = max(Config.minimumHeadroom, Int(Double(effectiveBudget) * Config.headroomRatio))
                 let desiredMaxTokens = effectiveBudget + tokenHeadroom
-                var requiredMaxTokens = min(desiredMaxTokens, hardCap)
+                var requiredMaxTokens = min(desiredMaxTokens, Config.hardTokenCap)
                 if requiredMaxTokens <= effectiveBudget {
-                    requiredMaxTokens = min(effectiveBudget + 1, hardCap)
+                    requiredMaxTokens = min(effectiveBudget + 1, Config.hardTokenCap)
                 }
                 
                 let hasMaxOutputTokensField = json.keys.contains("max_output_tokens")
@@ -468,9 +478,14 @@ class ThinkingProxy {
     /**
      Forwards the request to CLIProxyAPI on port 8318 (pass-through for non-thinking requests)
      */
-    private func forwardRequest(method: String, path: String, version: String, headers: [(String, String)], body: String, originalConnection: NWConnection, forceConnectionClose: Bool, retryWithApiPrefix: Bool = false) {
+    private func forwardRequest(method: String, path: String, version: String, headers: [(String, String)], body: String, originalConnection: NWConnection, retryWithApiPrefix: Bool = false) {
         // Create connection to CLIProxyAPI
-        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(targetHost), port: NWEndpoint.Port(rawValue: targetPort)!)
+        guard let port = NWEndpoint.Port(rawValue: targetPort) else {
+            NSLog("[ThinkingProxy] Invalid target port: %d", targetPort)
+            sendError(to: originalConnection, statusCode: 500, message: "Internal Server Error")
+            return
+        }
+        let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(targetHost), port: port)
         let parameters = NWParameters.tcp
         let targetConnection = NWConnection(to: endpoint, using: parameters)
         
@@ -509,11 +524,10 @@ class ThinkingProxy {
                             // Receive response from CLIProxyAPI (with 404 retry capability)
                             if retryWithApiPrefix {
                                 self.receiveResponseWith404Retry(from: targetConnection, originalConnection: originalConnection, 
-                                                                 forceConnectionClose: forceConnectionClose, 
                                                                  method: method, path: path, version: version, 
                                                                  headers: headers, body: body)
                             } else {
-                                self.receiveResponse(from: targetConnection, originalConnection: originalConnection, forceConnectionClose: forceConnectionClose)
+                                self.receiveResponse(from: targetConnection, originalConnection: originalConnection)
                             }
                         }
                     }))
@@ -536,7 +550,7 @@ class ThinkingProxy {
      Receives response and retries with /api/ prefix on 404
      */
     private func receiveResponseWith404Retry(from targetConnection: NWConnection, originalConnection: NWConnection, 
-                                             forceConnectionClose: Bool, method: String, path: String, version: String, 
+                                             method: String, path: String, version: String, 
                                              headers: [(String, String)], body: String) {
         targetConnection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
@@ -569,8 +583,7 @@ class ThinkingProxy {
                             // Retry with /api/ prefix
                             let newPath = "/api" + path
                             self.forwardRequest(method: method, path: newPath, version: version, headers: headers, 
-                                              body: body, originalConnection: originalConnection, 
-                                              forceConnectionClose: forceConnectionClose, retryWithApiPrefix: false)
+                                              body: body, originalConnection: originalConnection, retryWithApiPrefix: false)
                             return
                         }
                     }
@@ -589,7 +602,7 @@ class ThinkingProxy {
                         }))
                     } else {
                         // Continue streaming
-                        self.streamNextChunk(from: targetConnection, to: originalConnection, forceConnectionClose: forceConnectionClose)
+                        self.streamNextChunk(from: targetConnection, to: originalConnection)
                     }
                 }))
             } else if isComplete {
@@ -605,15 +618,15 @@ class ThinkingProxy {
      Receives response from CLIProxyAPI
      Starts the streaming loop for response data
      */
-    private func receiveResponse(from targetConnection: NWConnection, originalConnection: NWConnection, forceConnectionClose: Bool) {
+    private func receiveResponse(from targetConnection: NWConnection, originalConnection: NWConnection) {
         // Start the streaming loop
-        streamNextChunk(from: targetConnection, to: originalConnection, forceConnectionClose: forceConnectionClose)
+        streamNextChunk(from: targetConnection, to: originalConnection)
     }
     
     /**
      Streams response chunks iteratively (uses async scheduling instead of recursion to avoid stack buildup)
      */
-    private func streamNextChunk(from targetConnection: NWConnection, to originalConnection: NWConnection, forceConnectionClose: Bool) {
+    private func streamNextChunk(from targetConnection: NWConnection, to originalConnection: NWConnection) {
         targetConnection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
             
@@ -639,7 +652,7 @@ class ThinkingProxy {
                         }))
                     } else {
                         // Schedule next iteration of the streaming loop
-                        self.streamNextChunk(from: targetConnection, to: originalConnection, forceConnectionClose: forceConnectionClose)
+                        self.streamNextChunk(from: targetConnection, to: originalConnection)
                     }
                 }))
             } else if isComplete {

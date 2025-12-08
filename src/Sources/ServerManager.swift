@@ -44,10 +44,15 @@ private struct RingBuffer<Element> {
     }
 }
 
-class ServerManager {
+class ServerManager: ObservableObject {
     private var process: Process?
     @Published private(set) var isRunning = false
     private(set) var port = 8317
+    
+    /// Helper class to capture output text across closures
+    private class OutputCapture {
+        var text = ""
+    }
     private var logBuffer: RingBuffer<String>
     private let maxLogLines = 1000
     private let processQueue = DispatchQueue(label: "io.automaze.vibeproxy.server-process", qos: .userInitiated)
@@ -128,10 +133,14 @@ class ServerManager {
         
         // Handle termination
         process?.terminationHandler = { [weak self] process in
+            // Clear pipe handlers to prevent memory leaks
+            outputPipe.fileHandleForReading.readabilityHandler = nil
+            errorPipe.fileHandleForReading.readabilityHandler = nil
+            
             DispatchQueue.main.async {
                 self?.isRunning = false
                 self?.addLog("Server stopped with code: \(process.terminationStatus)")
-                NotificationCenter.default.post(name: NSNotification.Name("ServerStatusChanged"), object: nil)
+                NotificationCenter.default.post(name: .serverStatusChanged, object: nil)
             }
         }
         
@@ -146,7 +155,7 @@ class ServerManager {
             DispatchQueue.main.asyncAfter(deadline: .now() + Timing.readinessCheckDelay) { [weak self] in
                 guard let self = self else { return }
                 if let process = self.process, process.isRunning {
-                    NotificationCenter.default.post(name: NSNotification.Name("ServerStatusChanged"), object: nil)
+                    NotificationCenter.default.post(name: .serverStatusChanged, object: nil)
                     completion(true)
                 } else {
                     self.addLog("⚠️ Server exited before becoming ready")
@@ -163,7 +172,7 @@ class ServerManager {
         guard let process = process else {
             DispatchQueue.main.async {
                 self.isRunning = false
-                NotificationCenter.default.post(name: NSNotification.Name("ServerStatusChanged"), object: nil)
+                NotificationCenter.default.post(name: .serverStatusChanged, object: nil)
                 completion?()
             }
             return
@@ -195,7 +204,7 @@ class ServerManager {
                 self.process = nil
                 self.isRunning = false
                 self.addLog("✓ Server stopped")
-                NotificationCenter.default.post(name: NSNotification.Name("ServerStatusChanged"), object: nil)
+                NotificationCenter.default.post(name: .serverStatusChanged, object: nil)
                 completion?()
             }
         }
@@ -247,8 +256,6 @@ class ServerManager {
         authProcess.standardInput = inputPipe
         
         // For Copilot, we need to capture the device code from output
-        // Use a reference type to properly capture mutations across closures
-        class OutputCapture { var text = "" }
         let capture = OutputCapture()
         
         if case .copilotLogin = command {
@@ -309,7 +316,7 @@ class ServerManager {
                     // Authentication completed successfully
                     DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
                         // Give file system a moment to write the credential file
-                        NotificationCenter.default.post(name: NSNotification.Name("AuthDirectoryChanged"), object: nil)
+                        NotificationCenter.default.post(name: .authDirectoryChanged, object: nil)
                     }
                 }
             }

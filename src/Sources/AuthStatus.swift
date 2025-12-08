@@ -62,6 +62,14 @@ struct ServiceAccounts {
 class AuthManager: ObservableObject {
     @Published var serviceAccounts: [ServiceType: ServiceAccounts] = [:]
     
+    private static let dateFormatters: [ISO8601DateFormatter] = {
+        let withFractional = ISO8601DateFormatter()
+        withFractional.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let standard = ISO8601DateFormatter()
+        standard.formatOptions = [.withInternetDateTime]
+        return [withFractional, standard]
+    }()
+    
     init() {
         // Initialize empty accounts for all service types
         for type in ServiceType.allCases {
@@ -106,20 +114,7 @@ class AuthManager: ObservableObject {
                 var expiredDate: Date?
                 
                 if let expiredStr = json["expired"] as? String {
-                    // Try multiple date formats
-                    let formatters = [
-                        { () -> ISO8601DateFormatter in
-                            let f = ISO8601DateFormatter()
-                            f.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-                            return f
-                        }(),
-                        { () -> ISO8601DateFormatter in
-                            let f = ISO8601DateFormatter()
-                            f.formatOptions = [.withInternetDateTime]
-                            return f
-                        }()
-                    ]
-                    for formatter in formatters {
+                    for formatter in Self.dateFormatters {
                         if let date = formatter.date(from: expiredStr) {
                             expiredDate = date
                             break

@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.8.1] - 2025-12-08
+
+### Fixed
+- Race condition in ThinkingProxy stop() method
+- Memory leak in pipe handlers (ServerManager and TunnelManager)
+- Thread safety issue in TunnelManager URL detection
+
+### Changed
+- Minimum macOS version raised to 14.0 (Sonoma)
+- Extracted magic numbers to configuration constants
+- Replaced force unwraps with proper error handling
+- Centralized notification names into type-safe constants
+- Made date formatters static for better performance
+- Standardized logging to use NSLog throughout
+
+
 ## [1.8.0] - 2025-12-08
 
 ### Added
