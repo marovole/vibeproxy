@@ -6,6 +6,20 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 
+## [1.7.0] - 2025-12-08
+
+### Added
+- **Multi-Account Support** - Connect multiple accounts per provider (#70)
+  - Automatic round-robin distribution across accounts
+  - Auto-failover when an account hits rate limits
+  - Collapsible account lists in settings UI
+  - Per-account removal with confirmation dialog
+
+### Changed
+- Improved settings UI with cleaner account management
+- Binds CLIProxyAPI to localhost only for improved security (#75)
+
+
 ## [1.6.6] - 2025-12-08
 
 ### Updated

@@ -1,6 +1,44 @@
 import SwiftUI
 import ServiceManagement
 
+/// A single account row with remove button
+struct AccountRowView: View {
+    let account: AuthAccount
+    let removeColor: Color
+    let onRemove: () -> Void
+    
+    var body: some View {
+        HStack(spacing: 8) {
+            Circle()
+                .fill(account.isExpired ? Color.orange : Color.green)
+                .frame(width: 6, height: 6)
+            Text(account.displayName)
+                .font(.caption)
+                .foregroundColor(account.isExpired ? .orange : .secondary)
+            if account.isExpired {
+                Text("(expired)")
+                    .font(.caption2)
+                    .foregroundColor(.orange)
+            }
+            Button(action: onRemove) {
+                HStack(spacing: 2) {
+                    Image(systemName: "minus.circle.fill")
+                        .font(.caption)
+                    Text("Remove")
+                        .font(.caption)
+                }
+                .foregroundColor(removeColor)
+            }
+            .buttonStyle(.plain)
+            .padding(.leading, 8)
+            .onHover { inside in
+                if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
+            }
+        }
+        .padding(.leading, 28)
+    }
+}
+
 /// A row displaying a service with its connected accounts and add button
 struct ServiceRow: View {
     let serviceType: ServiceType
@@ -10,9 +48,19 @@ struct ServiceRow: View {
     let helpText: String?
     let onConnect: () -> Void
     let onDisconnect: (AuthAccount) -> Void
+    var onExpandChange: ((Bool) -> Void)? = nil
+    
+    @State private var isExpanded = false
+    @State private var accountToRemove: AuthAccount?
+    @State private var showingRemoveConfirmation = false
+    
+    private var activeCount: Int { accounts.filter { !$0.isExpired }.count }
+    private var expiredCount: Int { accounts.filter { $0.isExpired }.count }
+    private let removeColor = Color(red: 0xeb/255, green: 0x0f/255, blue: 0x0f/255)
     
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
+            // Header row
             HStack {
                 if let nsImage = IconCatalog.shared.image(named: iconName, resizedTo: NSSize(width: 20, height: 20), template: true) {
                     Image(nsImage: nsImage)
@@ -34,41 +82,46 @@ struct ServiceRow: View {
                 }
             }
             
-            // Show connected accounts
+            // Account display
             if !accounts.isEmpty {
-                ForEach(accounts) { account in
-                    HStack(spacing: 8) {
-                        Circle()
-                            .fill(account.isExpired ? Color.orange : Color.green)
-                            .frame(width: 6, height: 6)
-                        Text(account.displayName)
-                            .font(.caption)
-                            .foregroundColor(account.isExpired ? .orange : .secondary)
-                        if account.isExpired {
-                            Text("(expired)")
-                                .font(.caption2)
-                                .foregroundColor(.orange)
-                        }
-                        Spacer()
-                        Button("Remove") {
-                            onDisconnect(account)
-                        }
+                // Collapsible summary
+                HStack(spacing: 4) {
+                    Text("\(accounts.count) connected account\(accounts.count == 1 ? "" : "s")")
                         .font(.caption)
-                        .controlSize(.small)
+                        .foregroundColor(.green)
+                    
+                    if accounts.count > 1 {
+                        Text("• Round-robin w/ auto-failover")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
                     }
-                    .padding(.leading, 28)
+                    
+                    Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
+                        .font(.caption)
+                        .foregroundColor(.secondary)
+                }
+                .padding(.leading, 28)
+                .contentShape(Rectangle())
+                .onTapGesture {
+                    withAnimation(.easeInOut(duration: 0.2)) {
+                        isExpanded.toggle()
+                    }
                 }
                 
-                // Show account count summary
-                let activeCount = accounts.filter { !$0.isExpired }.count
-                if accounts.count > 1 {
-                    Text("\(activeCount) active account\(activeCount == 1 ? "" : "s") • Auto-failover enabled")
-                        .font(.caption2)
-                        .foregroundColor(.secondary)
-                        .padding(.leading, 28)
+                // Expanded accounts list
+                if isExpanded {
+                    VStack(alignment: .leading, spacing: 6) {
+                        ForEach(accounts) { account in
+                            AccountRowView(account: account, removeColor: removeColor) {
+                                accountToRemove = account
+                                showingRemoveConfirmation = true
+                            }
+                        }
+                    }
+                    .padding(.top, 4)
                 }
             } else {
-                Text("No accounts connected")
+                Text("No connected accounts")
                     .font(.caption)
                     .foregroundColor(.secondary)
                     .padding(.leading, 28)
@@ -76,6 +129,24 @@ struct ServiceRow: View {
         }
         .padding(.vertical, 4)
         .help(helpText ?? "")
+        .onChange(of: isExpanded) { newValue in
+            onExpandChange?(newValue)
+        }
+        .alert("Remove Account", isPresented: $showingRemoveConfirmation) {
+            Button("Cancel", role: .cancel) {
+                accountToRemove = nil
+            }
+            Button("Remove", role: .destructive) {
+                if let account = accountToRemove {
+                    onDisconnect(account)
+                }
+                accountToRemove = nil
+            }
+        } message: {
+            if let account = accountToRemove {
+                Text("Are you sure you want to remove \(account.displayName) from \(serviceType.displayName)?")
+            }
+        }
     }
 }
 
@@ -91,6 +162,7 @@ struct SettingsView: View {
     @State private var showingQwenEmailPrompt = false
     @State private var qwenEmail = ""
     @State private var pendingRefresh: DispatchWorkItem?
+    @State private var expandedRowCount = 0
     
     private enum Timing {
         static let serverRestartDelay: TimeInterval = 0.3
@@ -152,7 +224,8 @@ struct SettingsView: View {
                         isAuthenticating: authenticatingService == .antigravity,
                         helpText: "Antigravity provides OAuth-based access to various AI models including Gemini and Claude. One login gives you access to multiple AI services.",
                         onConnect: { connectService(.antigravity) },
-                        onDisconnect: { account in disconnectAccount(account) }
+                        onDisconnect: { account in disconnectAccount(account) },
+                        onExpandChange: { expanded in expandedRowCount += expanded ? 1 : -1 }
                     )
                     
                     ServiceRow(
@@ -162,7 +235,8 @@ struct SettingsView: View {
                         isAuthenticating: authenticatingService == .claude,
                         helpText: nil,
                         onConnect: { connectService(.claude) },
-                        onDisconnect: { account in disconnectAccount(account) }
+                        onDisconnect: { account in disconnectAccount(account) },
+                        onExpandChange: { expanded in expandedRowCount += expanded ? 1 : -1 }
                     )
                     
                     ServiceRow(
@@ -172,18 +246,21 @@ struct SettingsView: View {
                         isAuthenticating: authenticatingService == .codex,
                         helpText: nil,
                         onConnect: { connectService(.codex) },
-                        onDisconnect: { account in disconnectAccount(account) }
+                        onDisconnect: { account in disconnectAccount(account) },
+                        onExpandChange: { expanded in expandedRowCount += expanded ? 1 : -1 }
                     )
                     
-                    ServiceRow(
-                        serviceType: .copilot,
-                        iconName: "icon-copilot.png",
-                        accounts: authManager.accounts(for: .copilot),
-                        isAuthenticating: authenticatingService == .copilot,
-                        helpText: "GitHub Copilot provides access to Claude, GPT, Gemini and other models via your Copilot subscription.",
-                        onConnect: { connectService(.copilot) },
-                        onDisconnect: { account in disconnectAccount(account) }
-                    )
+                    // TODO: Enable when CLIProxyAPI PR #430 is merged
+                    // ServiceRow(
+                    //     serviceType: .copilot,
+                    //     iconName: "icon-copilot.png",
+                    //     accounts: authManager.accounts(for: .copilot),
+                    //     isAuthenticating: authenticatingService == .copilot,
+                    //     helpText: "GitHub Copilot provides access to Claude, GPT, Gemini and other models via your Copilot subscription.",
+                    //     onConnect: { connectService(.copilot) },
+                    //     onDisconnect: { account in disconnectAccount(account) },
+                    //     onExpandChange: { expanded in expandedRowCount += expanded ? 1 : -1 }
+                    // )
                     
                     ServiceRow(
                         serviceType: .gemini,
@@ -192,7 +269,8 @@ struct SettingsView: View {
                         isAuthenticating: authenticatingService == .gemini,
                         helpText: "⚠️ Note: If you're an existing Gemini user with multiple projects, authentication will use your default project. Set your desired project as default in Google AI Studio before connecting.",
                         onConnect: { connectService(.gemini) },
-                        onDisconnect: { account in disconnectAccount(account) }
+                        onDisconnect: { account in disconnectAccount(account) },
+                        onExpandChange: { expanded in expandedRowCount += expanded ? 1 : -1 }
                     )
                     
                     ServiceRow(
@@ -202,14 +280,16 @@ struct SettingsView: View {
                         isAuthenticating: authenticatingService == .qwen,
                         helpText: nil,
                         onConnect: { showingQwenEmailPrompt = true },
-                        onDisconnect: { account in disconnectAccount(account) }
+                        onDisconnect: { account in disconnectAccount(account) },
+                        onExpandChange: { expanded in expandedRowCount += expanded ? 1 : -1 }
                     )
                 }
             }
             .formStyle(.grouped)
+            .scrollDisabled(expandedRowCount == 0)
 
             Spacer()
-                .frame(height: 12)
+                .frame(height: 6)
 
             // Footer
             VStack(spacing: 4) {
@@ -250,13 +330,14 @@ struct SettingsView: View {
 
                 Link("Report an issue", destination: URL(string: "https://github.com/automazeio/vibeproxy/issues")!)
                     .font(.caption)
+                    .padding(.top, 6)
                     .onHover { inside in
                         if inside { NSCursor.pointingHand.push() } else { NSCursor.pop() }
                     }
             }
             .padding(.bottom, 12)
         }
-        .frame(width: 480, height: 580)
+        .frame(width: 480, height: 610)
         .sheet(isPresented: $showingQwenEmailPrompt) {
             VStack(spacing: 16) {
                 Text("Qwen Account Email")
