@@ -41,6 +41,8 @@ class ThinkingProxy {
         do {
             let parameters = NWParameters.tcp
             parameters.allowLocalEndpointReuse = true
+            // Bind to loopback interface only for security (prevents exposure on public IPs)
+            parameters.requiredInterfaceType = .loopback
             
             guard let port = NWEndpoint.Port(rawValue: proxyPort) else {
                 NSLog("[ThinkingProxy] Invalid port: %d", proxyPort)
