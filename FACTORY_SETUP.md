@@ -121,34 +121,6 @@ Edit your Factory configuration file at `~/.factory/config.json` (if the file do
     },
 
     {
-      "model_display_name": "GPT-5 Codex",
-      "model": "gpt-5-codex",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
-      "model_display_name": "GPT-5 Codex (Low)",
-      "model": "gpt-5-codex-low",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
-      "model_display_name": "GPT-5 Codex (Medium)",
-      "model": "gpt-5-codex-medium",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
-      "model_display_name": "GPT-5 Codex (High)",
-      "model": "gpt-5-codex-high",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
       "model_display_name": "GPT-5.1 Codex",
       "model": "gpt-5.1-codex",
       "base_url": "http://localhost:8317/v1",
@@ -156,22 +128,8 @@ Edit your Factory configuration file at `~/.factory/config.json` (if the file do
       "provider": "openai"
     },
     {
-      "model_display_name": "GPT-5.1 Codex (Low)",
-      "model": "gpt-5.1-codex-low",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
-      "model_display_name": "GPT-5.1 Codex (Medium)",
-      "model": "gpt-5.1-codex-medium",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
       "model_display_name": "GPT-5.1 Codex (High)",
-      "model": "gpt-5.1-codex-high",
+      "model": "gpt-5.1-codex(high)",
       "base_url": "http://localhost:8317/v1",
       "api_key": "dummy-not-used",
       "provider": "openai"
@@ -191,33 +149,47 @@ Edit your Factory configuration file at `~/.factory/config.json` (if the file do
       "provider": "openai"
     },
     {
-      "model_display_name": "GPT-5.1 (Minimal)",
-      "model": "gpt-5.1-minimal",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
       "model_display_name": "GPT-5.1 (Low)",
-      "model": "gpt-5.1-low",
-      "base_url": "http://localhost:8317/v1",
-      "api_key": "dummy-not-used",
-      "provider": "openai"
-    },
-    {
-      "model_display_name": "GPT-5.1 (Medium)",
-      "model": "gpt-5.1-medium",
+      "model": "gpt-5.1(low)",
       "base_url": "http://localhost:8317/v1",
       "api_key": "dummy-not-used",
       "provider": "openai"
     },
     {
       "model_display_name": "GPT-5.1 (High)",
-      "model": "gpt-5.1-high",
+      "model": "gpt-5.1(high)",
       "base_url": "http://localhost:8317/v1",
       "api_key": "dummy-not-used",
       "provider": "openai"
-    },    
+    },
+    {
+      "model_display_name": "GPT-5.2",
+      "model": "gpt-5.2",
+      "base_url": "http://localhost:8317/v1",
+      "api_key": "dummy-not-used",
+      "provider": "openai"
+    },
+    {
+      "model_display_name": "GPT-5.2 (High)",
+      "model": "gpt-5.2(high)",
+      "base_url": "http://localhost:8317/v1",
+      "api_key": "dummy-not-used",
+      "provider": "openai"
+    },
+    {
+      "model_display_name": "GPT-5.2 Codex",
+      "model": "gpt-5.2-codex",
+      "base_url": "http://localhost:8317/v1",
+      "api_key": "dummy-not-used",
+      "provider": "openai"
+    },
+    {
+      "model_display_name": "GPT-5.2 Codex (High)",
+      "model": "gpt-5.2-codex(high)",
+      "base_url": "http://localhost:8317/v1",
+      "api_key": "dummy-not-used",
+      "provider": "openai"
+    },
     {
       "model_display_name": "Gemini 3 Pro",
       "model": "gemini-3-pro-preview",
@@ -327,11 +299,26 @@ Edit your Factory configuration file at `~/.factory/config.json` (if the file do
 - `qwen3-coder-flash` - Qwen3 Coder Flash (Fast coding assistant)
 
 ### OpenAI Models
+
+**GPT-5.2** (Latest):
+- `gpt-5.2` - Latest GPT with improved reasoning
+- `gpt-5.2-codex` - Latest Codex for coding tasks
+
+**GPT-5.1**:
 - `gpt-5.1` - Next-gen GPT with better reasoning + planning
-- `gpt-5.1-minimal` / `low` / `medium` / `high` - GPT-5.1 with explicit reasoning effort controls
-- `gpt-5.1-codex` - Latest Codex upgrade (faster reasoning + better tool use)
-- `gpt-5.1-codex-low` / `medium` / `high` - Same model with explicit reasoning effort presets
+- `gpt-5.1-codex` - Codex upgrade (faster reasoning + better tool use)
 - `gpt-5.1-codex-max` - Codex Max optimized for long-horizon agentic coding tasks
+
+**Reasoning Effort Control** (GPT-5.1+):
+
+Use parentheses syntax to control reasoning effort:
+- `gpt-5.2(none)` - No extended reasoning
+- `gpt-5.2(low)` - Low reasoning effort
+- `gpt-5.2(medium)` - Medium reasoning effort
+- `gpt-5.2(high)` - High reasoning effort
+- `gpt-5.2(xhigh)` - Extra high reasoning effort
+
+This works with any GPT-5.x model: `gpt-5.1(high)`, `gpt-5.1-codex(medium)`, `gpt-5.2-codex(high)`, etc.
 
 No manual CLIProxyAPI update is required—VibeProxy automatically keeps CLIProxyAPI up to date via our new auto-update workflow, so you can use new models immediately.
 
@@ -400,6 +387,36 @@ If the suffix is not a valid integer (e.g., `-thinking-blabla`), VibeProxy strip
 - Claude Sonnet 4.5 (`claude-sonnet-4-5-*`)
 
 This works seamlessly with Factory CLI - just select the thinking variant in your model selector!
+
+### Interleaved Thinking (Automatic)
+
+When you use extended thinking (`-thinking-*` suffix), VibeProxy automatically enables **interleaved thinking** by adding the `anthropic-beta: interleaved-thinking-2025-05-14` header to your requests.
+
+**What is Interleaved Thinking?**
+
+Without interleaved thinking, Claude thinks once at the beginning and then executes all tool calls. With interleaved thinking enabled, Claude can think *between* tool calls, allowing it to:
+
+- **Reason about tool results** before deciding what to do next
+- **Chain multiple tool calls** with reasoning steps in between
+- **Make more nuanced decisions** based on intermediate results
+- **Adapt its approach** as it learns more from each tool interaction
+
+**Why This Matters for Coding Agents**
+
+AI coding tools like Factory Droids heavily rely on tool use (reading files, searching code, running commands). Interleaved thinking significantly improves the quality of multi-step coding tasks because Claude can:
+
+1. Read a file → *think about what it found* → decide which file to read next
+2. Run a test → *analyze the failure* → make a targeted fix
+3. Search for a pattern → *reason about the results* → refine the search
+
+**Automatic Enablement**
+
+You don't need to configure anything - when you use any `-thinking-*` model variant, VibeProxy automatically:
+1. Adds the thinking parameter to the request body
+2. Injects the `anthropic-beta: interleaved-thinking-2025-05-14` header
+3. Merges with any existing beta headers (no duplicates)
+
+This is enabled by default because if you're opting into extended thinking, you almost certainly want the improved reasoning that interleaved thinking provides for tool-heavy workflows.
 
 ## Tips
 

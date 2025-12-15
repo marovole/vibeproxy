@@ -6,6 +6,15 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [1.8.1] - 2025-12-08
 
+## [1.8.9] - 2025-12-15
+
+### Added
+- **Interleaved Thinking Support** - ThinkingProxy now automatically adds the `anthropic-beta: interleaved-thinking-2025-05-14` header when extended thinking is enabled via the `-thinking-*` model suffix. This allows Claude to reason between tool calls for better multi-step coding tasks.
+
+### Updated
+- **Documentation** - Updated FACTORY_SETUP.md with GPT 5.2 models and corrected reasoning effort syntax (use parentheses like `gpt-5.2(high)` instead of dashes)
+
+
 ## [1.8.8] - 2025-12-15
 
 ### Updated
