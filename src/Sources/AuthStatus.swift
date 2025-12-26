@@ -27,13 +27,18 @@ struct AuthAccount: Identifiable, Equatable {
     let login: String?  // for Copilot
     let type: ServiceType
     let expired: Date?
+    let hasRefreshToken: Bool  // If true, account can auto-refresh and isn't truly expired
     let filePath: URL
-    
+
     var isExpired: Bool {
+        // If we have a refresh token, the account can auto-renew and is never truly expired
+        if hasRefreshToken {
+            return false
+        }
         guard let expired = expired else { return false }
         return expired < Date()
     }
-    
+
     var displayName: String {
         if let email = email, !email.isEmpty {
             return email
@@ -43,7 +48,7 @@ struct AuthAccount: Identifiable, Equatable {
         }
         return id
     }
-    
+
     static func == (lhs: AuthAccount, rhs: AuthAccount) -> Bool {
         lhs.id == rhs.id
     }
@@ -111,8 +116,9 @@ class AuthManager: ObservableObject {
                 
                 let email = json["email"] as? String
                 let login = json["login"] as? String
+                let refreshToken = json["refresh_token"] as? String
                 var expiredDate: Date?
-                
+
                 if let expiredStr = json["expired"] as? String {
                     for formatter in Self.dateFormatters {
                         if let date = formatter.date(from: expiredStr) {
@@ -121,13 +127,14 @@ class AuthManager: ObservableObject {
                         }
                     }
                 }
-                
+
                 let account = AuthAccount(
                     id: file.lastPathComponent,
                     email: email,
                     login: login,
                     type: serviceType,
                     expired: expiredDate,
+                    hasRefreshToken: refreshToken != nil && !refreshToken!.isEmpty,
                     filePath: file
                 )
                 

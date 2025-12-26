@@ -27,6 +27,51 @@ class ThinkingProxy {
         static let hardTokenCap = 32000
         static let minimumHeadroom = 1024
         static let headroomRatio = 0.1
+
+        // TCP Keep-Alive settings for stable connections through tunnels/proxies
+        static let keepaliveIdle = 30      // Start sending keep-alive after 30s idle
+        static let keepaliveInterval = 10  // Send keep-alive every 10s
+        static let keepaliveCount = 3      // Consider dead after 3 failed probes
+    }
+
+    /**
+     Creates TCP parameters with Keep-Alive enabled for stable streaming connections
+     */
+    private func createTCPParameters() -> NWParameters {
+        let tcpOptions = NWProtocolTCP.Options()
+        tcpOptions.enableKeepalive = true
+        tcpOptions.keepaliveIdle = Config.keepaliveIdle
+        tcpOptions.keepaliveInterval = Config.keepaliveInterval
+        tcpOptions.keepaliveCount = Config.keepaliveCount
+
+        let parameters = NWParameters(tls: nil, tcp: tcpOptions)
+        parameters.allowLocalEndpointReuse = true
+        return parameters
+    }
+
+    /**
+     Creates TLS parameters with TCP Keep-Alive for HTTPS connections
+     */
+    private func createTLSParameters() -> NWParameters {
+        let tcpOptions = NWProtocolTCP.Options()
+        tcpOptions.enableKeepalive = true
+        tcpOptions.keepaliveIdle = Config.keepaliveIdle
+        tcpOptions.keepaliveInterval = Config.keepaliveInterval
+        tcpOptions.keepaliveCount = Config.keepaliveCount
+
+        let tlsOptions = NWProtocolTLS.Options()
+        let parameters = NWParameters(tls: tlsOptions, tcp: tcpOptions)
+        parameters.allowLocalEndpointReuse = true
+        return parameters
+    }
+
+    /**
+     Checks if the request body indicates a streaming request
+     */
+    private func isStreamingRequest(_ body: String) -> Bool {
+        return body.contains("\"stream\":true") ||
+               body.contains("\"stream\": true") ||
+               body.contains("\"stream\" : true")
     }
     
     /**
@@ -39,9 +84,9 @@ class ThinkingProxy {
         }
         
         do {
-            let parameters = NWParameters.tcp
-            parameters.allowLocalEndpointReuse = true
-            
+            // Use TCP parameters with Keep-Alive enabled for stable tunnel connections
+            let parameters = createTCPParameters()
+
             guard let port = NWEndpoint.Port(rawValue: proxyPort) else {
                 NSLog("[ThinkingProxy] Invalid port: %d", proxyPort)
                 return
@@ -348,10 +393,9 @@ class ThinkingProxy {
      Forwards Amp API requests to ampcode.com, stripping the /api/ prefix
      */
     private func forwardToAmp(method: String, path: String, version: String, headers: [(String, String)], body: String, originalConnection: NWConnection) {
-        // Create TLS parameters for HTTPS
-        let tlsOptions = NWProtocolTLS.Options()
-        let parameters = NWParameters(tls: tlsOptions, tcp: NWProtocolTCP.Options())
-        
+        // Create TLS parameters with Keep-Alive enabled
+        let parameters = createTLSParameters()
+
         // Create connection to ampcode.com:443
         let endpoint = NWEndpoint.hostPort(host: "ampcode.com", port: 443)
         let targetConnection = NWConnection(to: endpoint, using: parameters)
@@ -485,24 +529,27 @@ class ThinkingProxy {
      Forwards the request to CLIProxyAPI on port 8318 (pass-through for non-thinking requests)
      */
     private func forwardRequest(method: String, path: String, version: String, headers: [(String, String)], body: String, thinkingEnabled: Bool = false, originalConnection: NWConnection, retryWithApiPrefix: Bool = false) {
-        // Create connection to CLIProxyAPI
+        // Create connection to CLIProxyAPI with Keep-Alive enabled
         guard let port = NWEndpoint.Port(rawValue: targetPort) else {
             NSLog("[ThinkingProxy] Invalid target port: %d", targetPort)
             sendError(to: originalConnection, statusCode: 500, message: "Internal Server Error")
             return
         }
         let endpoint = NWEndpoint.hostPort(host: NWEndpoint.Host(targetHost), port: port)
-        let parameters = NWParameters.tcp
+        let parameters = createTCPParameters()
         let targetConnection = NWConnection(to: endpoint, using: parameters)
-        
+
+        // Check if this is a streaming request for connection handling
+        let isStreaming = isStreamingRequest(body)
+
         targetConnection.stateUpdateHandler = { state in
             switch state {
             case .ready:
                 // Build the forwarded request
                 var forwardedRequest = "\(method) \(path) \(version)\r\n"
-                let excludedHeaders: Set<String> = ["content-length", "host", "transfer-encoding"]
+                let excludedHeaders: Set<String> = ["content-length", "host", "transfer-encoding", "connection"]
                 var existingBetaHeader: String? = nil
-                
+
                 for (name, value) in headers {
                     let lowercasedName = name.lowercased()
                     if excludedHeaders.contains(lowercasedName) {
@@ -536,9 +583,13 @@ class ThinkingProxy {
                 
                 // Override Host header
                 forwardedRequest += "Host: \(self.targetHost):\(self.targetPort)\r\n"
-                // Always close connections - this proxy doesn't support keep-alive/pipelining
-                forwardedRequest += "Connection: close\r\n"
-                
+                // Use keep-alive for streaming requests to prevent connection drops
+                if isStreaming {
+                    forwardedRequest += "Connection: keep-alive\r\n"
+                } else {
+                    forwardedRequest += "Connection: close\r\n"
+                }
+
                 let contentLength = body.utf8.count
                 forwardedRequest += "Content-Length: \(contentLength)\r\n"
                 forwardedRequest += "\r\n"
@@ -568,12 +619,18 @@ class ThinkingProxy {
                 NSLog("[ThinkingProxy] Target connection failed: \(error)")
                 self.sendError(to: originalConnection, statusCode: 502, message: "Bad Gateway")
                 targetConnection.cancel()
-                
+
+            case .cancelled:
+                NSLog("[ThinkingProxy] Target connection cancelled")
+
+            case .waiting(let error):
+                NSLog("[ThinkingProxy] Target connection waiting: \(error)")
+
             default:
                 break
             }
         }
-        
+
         targetConnection.start(queue: .global(qos: .userInitiated))
     }
     
@@ -658,26 +715,42 @@ class ThinkingProxy {
      Streams response chunks iteratively (uses async scheduling instead of recursion to avoid stack buildup)
      */
     private func streamNextChunk(from targetConnection: NWConnection, to originalConnection: NWConnection) {
+        // Check connection states before attempting to receive
+        guard case .ready = targetConnection.state else {
+            NSLog("[ThinkingProxy] Stream aborted: target connection not ready (state: \(targetConnection.state))")
+            originalConnection.cancel()
+            return
+        }
+
+        guard case .ready = originalConnection.state else {
+            NSLog("[ThinkingProxy] Stream aborted: client connection not ready (state: \(originalConnection.state))")
+            targetConnection.cancel()
+            return
+        }
+
         targetConnection.receive(minimumIncompleteLength: 1, maximumLength: 65536) { [weak self] data, _, isComplete, error in
             guard let self = self else { return }
-            
+
             if let error = error {
-                NSLog("[ThinkingProxy] Receive response error: \(error)")
+                NSLog("[ThinkingProxy] Stream receive error: \(error), target state: \(targetConnection.state), client state: \(originalConnection.state)")
                 targetConnection.cancel()
                 originalConnection.cancel()
                 return
             }
-            
+
             if let data = data, !data.isEmpty {
                 // Forward response chunk to original client
                 originalConnection.send(content: data, completion: .contentProcessed({ sendError in
                     if let sendError = sendError {
-                        NSLog("[ThinkingProxy] Send response error: \(sendError)")
+                        NSLog("[ThinkingProxy] Stream send error: \(sendError), client state: \(originalConnection.state)")
+                        targetConnection.cancel()
+                        originalConnection.cancel()
+                        return
                     }
-                    
+
                     if isComplete {
                         targetConnection.cancel()
-                        // Always close client connection - no keep-alive/pipelining support
+                        // Signal end of response
                         originalConnection.send(content: nil, isComplete: true, completion: .contentProcessed({ _ in
                             originalConnection.cancel()
                         }))
@@ -688,7 +761,7 @@ class ThinkingProxy {
                 }))
             } else if isComplete {
                 targetConnection.cancel()
-                // Always close client connection - no keep-alive/pipelining support
+                // Signal end of response
                 originalConnection.send(content: nil, isComplete: true, completion: .contentProcessed({ _ in
                     originalConnection.cancel()
                 }))
